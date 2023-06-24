@@ -35,14 +35,29 @@ def get_data(symbol):
     df_today = pd.DataFrame(res_today)
     today_volume = df_today['v'].sum() if not df_today.empty else 0
 
-    return [symbol, prev_close, open_price, prev_volume, today_volume, average_volume, market_cap, pe_ratio, eps]
+    # Get stock candles for calculating daily returns
+    res = finnhub_client.stock_candles(symbol, 'D', int(ten_days_ago.timestamp()), int(today.timestamp()))
+    df_candles = pd.DataFrame(res)
+    df_candles['t'] = pd.to_datetime(df_candles['t'], unit='s')
+    df_candles.set_index('t', inplace=True)
+    df_candles['returns'] = df_candles['c'].pct_change()
 
-# List of symbols to get data for
-symbols = ['AAPL', 'MSFT', 'GOOG']
+    # Calculate volatility and Sharpe Ratio
+    risk_free_rate = 0.02  # Assuming risk-free rate of 2%
+    volatility = df_candles['returns'].std() * (252 ** 0.5)  # Assuming 252 trading days in a year
+    sharpe_ratio = (df_candles['returns'].mean() - risk_free_rate) / df_candles['returns'].std() * (252 ** 0.5) if df_candles['returns'].std() != 0 else 0
 
-# Fetch the data
-data = [get_data(symbol) for symbol in symbols]
+    return [symbol, prev_close, open_price, prev_volume, today_volume, average_volume, market_cap, pe_ratio, eps, volatility, sharpe_ratio]
 
-# Convert to DataFrame and write to CSV
-df = pd.DataFrame(data, columns=['Symbol', 'Previous Close', 'Open Price', 'Prev Day Volume', 'Today Volume', 'Avg Volume (10 days)', 'Market Cap', 'PE Ratio (ttm)', 'EPS (ttm)'])
-df.to_csv('stock_data.csv', index=False)
+
+if __name__ == '__main__':
+	# List of symbols to get data for
+	symbols = ['AAPL', 'MSFT', 'GOOG']
+
+	# Fetch the data
+	data = [get_data(symbol) for symbol in symbols]
+
+	# Convert to DataFrame and write to CSV
+	df = pd.DataFrame(data, columns=['Symbol', 'Previous Close', 'Open Price', 'Prev Day Volume', 'Today Volume', 'Avg Volume (10 days)', 'Market Cap', 'PE Ratio (ttm)', 'EPS (ttm)', 'Volatility', 'Sharpe Ratio'])
+	df = df.round(2)
+	df.to_csv('stock_data.csv', index=False)
